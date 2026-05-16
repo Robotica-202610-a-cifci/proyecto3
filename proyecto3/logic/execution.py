@@ -51,6 +51,13 @@ class PathExecutor:
             dy = ty - current_y
             dist = math.sqrt(dx ** 2 + dy ** 2)
 
+            # Obstaculo muy cerca al frente: avanzar al siguiente waypoint
+            d_frente = node.leer_distancia_en_angulo(0) if node.last_scan is not None else float('inf')
+            if d_frente < 0.28:
+                self._detener(node)
+                self._advance()
+                return 'EN_RUTA'
+
             if dist < TOL_DIST:
                 self._detener(node)
                 self._advance()
