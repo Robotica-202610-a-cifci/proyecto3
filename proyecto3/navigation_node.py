@@ -6,6 +6,7 @@ from geometry_msgs.msg import Twist
 import math
 import threading
 import os
+import time
 
 from .logic.lidar import obtener_distancia_angulo, obtener_distancias_rango
 from .logic.movement import calcular_rotacion, calcular_movimiento_relativo
@@ -51,6 +52,12 @@ class NavigationNode(Node):
         self._ruta_camino_txt = None    # ruta del archivo de camino
         self._fase_auto = None          # 'EJECUTANDO' | 'RELOCALIZANDO' | None
         self._reloc_espera = 0          # ticks de espera antes de leer LiDAR final
+
+        # Metricas
+        self._t_plan_inicio = 0.0
+        self._t_plan_fin = 0.0
+        self._t_ejec_inicio = 0.0
+        self._t_ejec_fin = 0.0
 
         # Timer a 10 Hz
         self.timer = self.create_timer(0.1, self.control_loop)
@@ -190,7 +197,9 @@ class NavigationNode(Node):
             return
 
         print("\n[AUTO] Planificando camino con RRT...")
+        self._t_plan_inicio = time.time()
         waypoints = planificar(self.escena_data)
+        self._t_plan_fin = time.time()
 
         if waypoints is None:
             print("[AUTO] ¡Error! No se encontró camino.")
@@ -214,11 +223,13 @@ class NavigationNode(Node):
         # Iniciar ejecucion
         self._executor = PathExecutor(waypoints)
         self._fase_auto = 'EJECUTANDO'
+        self._t_ejec_inicio = time.time()
         print("\n[AUTO] Iniciando ejecución...\n")
 
     def _finalizar_autonomo(self):
         """Relocalizacion y reporte al terminar el camino."""
         self.cmd_pub.publish(Twist())  # detener inmediatamente
+        self._t_ejec_fin = time.time()
         self._fase_auto = 'RELOCALIZANDO'
         self._reloc_espera = 30  # esperar 3 s parado antes de leer LiDAR
 
@@ -262,6 +273,27 @@ class NavigationNode(Node):
         ang_qfest_qact = diferencia_angular_deg(
             math.degrees(qf_est[2]), qact[2])
 
+        # Metricas del camino
+        dist_lineal = 0.0
+        suma_angular = 0.0
+        wps = self._waypoints_plan
+        for i in range(1, len(wps)):
+            x0, y0, t0 = wps[i - 1]
+            x1, y1, t1 = wps[i]
+            dx = x1 - x0
+            dy = y1 - y0
+            d = math.sqrt(dx * dx + dy * dy)
+            # Solo cuenta como traslacion si hay desplazamiento real (> 1 cm)
+            if d > 0.01:
+                dist_lineal += d
+            # Suma absoluta de rotaciones
+            dtheta = abs(math.atan2(math.sin(math.radians(t1 - t0)),
+                                    math.cos(math.radians(t1 - t0))))
+            suma_angular += math.degrees(dtheta)
+
+        t_plan = self._t_plan_fin - self._t_plan_inicio
+        t_ejec = self._t_ejec_fin - self._t_ejec_inicio
+
         sep = '═' * 50
         print(f"\n{sep}")
         print("  RESULTADO FINAL")
@@ -276,6 +308,13 @@ class NavigationNode(Node):
         print(sep)
         print(f"  Δ(qf – qf-est):   dist={dist_qf_qfest:.4f} m   Δθ={ang_qf_qfest:.2f}°")
         print(f"  Δ(qf-est – qact): dist={dist_qfest_qact:.4f} m   Δθ={ang_qfest_qact:.2f}°")
+        print(sep)
+        print("  MÉTRICAS PARA EL INFORME")
+        print(sep)
+        print(f"  Distancia lineal recorrida : {dist_lineal:.3f} m")
+        print(f"  Suma absoluta angular      : {suma_angular:.2f}°")
+        print(f"  Tiempo generación RRT      : {t_plan:.3f} s")
+        print(f"  Tiempo ejecución simulación: {t_ejec:.3f} s")
         print(f"{sep}\n")
 
     # =======================================================
