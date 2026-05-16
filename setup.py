@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'proyecto'
+package_name = 'proyecto3'
 
 setup(
     name=package_name,
@@ -32,7 +32,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'navigation = proyecto.navigation_node:main',
+            'navigation = proyecto3.navigation_node:main',
         ],
     },
 )

@@ -159,7 +159,7 @@ class NavigationNode(Node):
             directorio_actual, '..', 'data', f'Escena-Problema{numero_escena}.txt')
         if not os.path.exists(ruta_archivo):
             from ament_index_python.packages import get_package_share_directory
-            pkg_dir = get_package_share_directory('proyecto')
+            pkg_dir = get_package_share_directory('proyecto3')
             ruta_archivo = os.path.join(pkg_dir, 'data', f'Escena-Problema{numero_escena}.txt')
         try:
             with open(ruta_archivo, 'r', encoding='utf-8') as archivo:
