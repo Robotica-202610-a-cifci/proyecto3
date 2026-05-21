@@ -22,38 +22,57 @@ MAX_SEG_M = 1.0         # maximo metros por segmento recto en el camino final
 # Geometria: colision segmento–rectangulo inflado
 # ---------------------------------------------------------------------------
 
+def _aabb_intersecta_segmento(p1, p2, xmin, xmax, ymin, ymax):
+    """
+    Test exacto (Liang-Barsky) de interseccion segmento p1-p2 con AABB.
+    Retorna True si el segmento toca o cruza el rectangulo [xmin,xmax]x[ymin,ymax].
+    """
+    dx = p2[0] - p1[0]
+    dy = p2[1] - p1[1]
+    t0, t1 = 0.0, 1.0
+
+    for (low, high, origin, d) in (
+        (xmin, xmax, p1[0], dx),
+        (ymin, ymax, p1[1], dy),
+    ):
+        if abs(d) < 1e-12:
+            if origin < low or origin > high:
+                return False
+        else:
+            ta = (low - origin) / d
+            tb = (high - origin) / d
+            if ta > tb:
+                ta, tb = tb, ta
+            t0 = max(t0, ta)
+            t1 = min(t1, tb)
+            if t0 > t1:
+                return False
+    return True
+
+
 def _segmento_libre(p1, p2, obstaculos, robot_r, ancho, alto):
     """
     Verifica que el segmento p1-p2 no colisione con ningun obstaculo
     (rectangulares, inflados por robot_r) ni con las paredes del escenario.
-    Usa muestreo denso a lo largo del segmento.
+    Usa test exacto de interseccion segmento-AABB para evitar fallos en esquinas.
     """
-    dx = p2[0] - p1[0]
-    dy = p2[1] - p1[1]
-    dist = math.sqrt(dx * dx + dy * dy)
-    pasos = max(int(dist / (robot_r * 0.5)) + 1, 4)
-
-    for i in range(pasos + 1):
-        t = i / pasos
-        x = p1[0] + t * dx
-        y = p1[1] + t * dy
-
-        # Paredes
-        if x < robot_r or x > ancho - robot_r:
+    # Paredes: basta verificar los extremos (segmento dentro de AABB convexo)
+    for p in (p1, p2):
+        if p[0] < robot_r or p[0] > ancho - robot_r:
             return False
-        if y < robot_r or y > alto - robot_r:
+        if p[1] < robot_r or p[1] > alto - robot_r:
             return False
 
-        # Obstaculos inflados
-        for obs in obstaculos:
-            x1, y1 = obs['pto1']
-            x2, y2 = obs['pto2']
-            xmin = min(x1, x2) - robot_r
-            xmax = max(x1, x2) + robot_r
-            ymin = min(y1, y2) - robot_r
-            ymax = max(y1, y2) + robot_r
-            if xmin <= x <= xmax and ymin <= y <= ymax:
-                return False
+    # Obstaculos inflados: test exacto segmento-AABB
+    for obs in obstaculos:
+        x1, y1 = obs['pto1']
+        x2, y2 = obs['pto2']
+        xmin = min(x1, x2) - robot_r
+        xmax = max(x1, x2) + robot_r
+        ymin = min(y1, y2) - robot_r
+        ymax = max(y1, y2) + robot_r
+        if _aabb_intersecta_segmento(p1, p2, xmin, xmax, ymin, ymax):
+            return False
 
     return True
 
